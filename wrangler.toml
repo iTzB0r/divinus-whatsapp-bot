@@ -1,0 +1,30 @@
+name = "divinus-whatsapp-bot"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Endereço do webhook: https://divinus-whatsapp-bot.<sua-conta>.workers.dev/webhook
+workers_dev = true
+
+[vars]
+WA_PHONE_NUMBER_ID = "PREENCHER"          # ID do número no painel da Meta (não é o telefone)
+GRAPH_VERSION = "v23.0"
+TEAM_EMAIL = "divinustechsolucoes@gmail.com"
+FROM_EMAIL = "bot@divinustecnologia.com.br"
+
+# E-mail para a equipe (usa o Email Routing já configurado no domínio)
+[[send_email]]
+name = "TEAM_MAIL"
+destination_address = "divinustechsolucoes@gmail.com"
+
+# Uma "Conversa" por cliente: histórico + lembretes agendados
+[[durable_objects.bindings]]
+name = "CONVERSA"
+class_name = "Conversa"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Conversa"]
+
+[observability]
+enabled = true

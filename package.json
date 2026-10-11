@@ -1,0 +1,12 @@
+{
+  "name": "divinus-whatsapp-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "npx wrangler deploy",
+    "logs": "npx wrangler tail"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0"
+  }
+}

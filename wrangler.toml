@@ -7,8 +7,8 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [vars]
-WA_PHONE_NUMBER_ID = "PREENCHER"          # ID do número no painel da Meta (não é o telefone)
-GRAPH_VERSION = "v23.0"
+WA_PHONE_NUMBER_ID = "1345160925352692"   # número de teste da Meta (+1 555 647 1160); trocar pelo da Divinus depois
+GRAPH_VERSION = "v25.0"
 TEAM_EMAIL = "divinustechsolucoes@gmail.com"
 FROM_EMAIL = "bot@divinustecnologia.com.br"
 

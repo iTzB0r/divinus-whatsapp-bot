@@ -34,6 +34,7 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/admin") return admin(url, request, env);
+    if (url.pathname === "/admin/registrar") return registerPage(url, request, env);
     if (url.pathname !== "/webhook") return new Response("Divinus WhatsApp bot", { status: 200 });
 
     if (request.method === "GET") {
@@ -105,6 +106,34 @@ async function admin(url, request, env) {
   out.phone = await get(`${env.WA_PHONE_NUMBER_ID}?fields=display_phone_number,verified_name,name_status,code_verification_status,status,platform_type,quality_rating`);
   if (waba) out.subscribed_apps = await get(`${waba}/subscribed_apps`);
   return Response.json(out);
+}
+
+// Página para o dono registrar o número na Cloud API com o PIN de duas etapas.
+// O PIN é digitado pelo próprio dono e vai direto para a Meta; não é guardado.
+async function registerPage(url, request, env) {
+  const key = url.searchParams.get("key");
+  if (!env.WA_VERIFY_TOKEN || key !== env.WA_VERIFY_TOKEN) return new Response("Forbidden", { status: 403 });
+  let msg = "";
+  if (request.method === "POST") {
+    const pin = String((await request.formData()).get("pin") || "");
+    if (!/^\d{6}$/.test(pin)) {
+      msg = "O PIN precisa ter exatamente 6 números.";
+    } else {
+      const res = await fetch(`https://graph.facebook.com/${env.GRAPH_VERSION}/${env.WA_PHONE_NUMBER_ID}/register`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${env.WA_TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ messaging_product: "whatsapp", pin }),
+      });
+      const out = await res.json();
+      msg = res.ok && out.success ? "✅ Número registrado! O bot já está atendendo." : `❌ A Meta recusou: ${out.error?.message || res.status}`;
+    }
+  }
+  const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  return new Response(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Registrar número</title>
+<style>body{font-family:system-ui,sans-serif;background:#0A1737;color:#FCF3E3;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}form{background:#0E1D45;border:1px solid #DDBD8455;border-radius:16px;padding:28px;max-width:380px;width:100%}h1{font-size:1.2rem;margin:0 0 8px}p{color:#9AA5C4;font-size:.92rem}input{width:100%;box-sizing:border-box;font-size:1.4rem;letter-spacing:.4em;text-align:center;padding:12px;border-radius:10px;border:1px solid #DDBD8466;background:#060E24;color:#FCF3E3;margin:12px 0}button{width:100%;padding:12px;border:0;border-radius:999px;background:#DDBD84;color:#0A1737;font-weight:700;font-size:1rem;cursor:pointer}.msg{color:#FCF3E3;background:#060E24;border-radius:10px;padding:10px;margin-top:14px}</style></head>
+<body><form method="post"><h1>Registrar o número do bot</h1><p>Crie um PIN de 6 números para a verificação em duas etapas do WhatsApp da Divinus. Guarde esse PIN: a Meta pode pedir de novo no futuro.</p>
+<input name="pin" inputmode="numeric" pattern="\\d{6}" maxlength="6" autocomplete="off" required placeholder="••••••"><button type="submit">Registrar</button>${msg ? `<div class="msg">${esc(msg)}</div>` : ""}</form></body></html>`,
+    { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } });
 }
 
 const stub = (env, waId) => env.CONVERSA.get(env.CONVERSA.idFromName(waId));

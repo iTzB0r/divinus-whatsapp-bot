@@ -100,9 +100,25 @@ async function admin(url, request, env) {
   const auth = { Authorization: `Bearer ${env.WA_TOKEN}` };
   const get = async (path) => (await fetch(`${base}/${path}`, { headers: auth })).json();
   const out = {};
+  if (request.method === "POST" && url.searchParams.get("profile") === "1") {
+    out.profile_update = await (await fetch(`${base}/${env.WA_PHONE_NUMBER_ID}/whatsapp_business_profile`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        about: "Sites, chatbots com IA e painéis de BI. Atendimento 24h.",
+        description: "A Divinus cria sites, chatbots com inteligência artificial e painéis de BI sob medida para empresas. Fale com nosso assistente a qualquer hora e agende um diagnóstico gratuito com a equipe.",
+        address: "Belém, PA",
+        email: "contato@divinustecnologia.com.br",
+        websites: ["https://divinustecnologia.com.br/"],
+        vertical: "PROF_SERVICES",
+      }),
+    })).json();
+  }
   if (request.method === "POST" && waba) {
     out.subscribe = await (await fetch(`${base}/${waba}/subscribed_apps`, { method: "POST", headers: auth })).json();
   }
+  out.profile = await get(`${env.WA_PHONE_NUMBER_ID}/whatsapp_business_profile?fields=about,description,address,email,websites,vertical,profile_picture_url`);
   out.phone = await get(`${env.WA_PHONE_NUMBER_ID}?fields=display_phone_number,verified_name,name_status,code_verification_status,status,platform_type,quality_rating`);
   if (waba) out.subscribed_apps = await get(`${waba}/subscribed_apps`);
   return Response.json(out);

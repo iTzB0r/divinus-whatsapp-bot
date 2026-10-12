@@ -117,6 +117,28 @@ async function admin(url, request, env) {
       }),
     })).json();
   }
+  if (request.method === "POST" && waba && url.searchParams.get("templates") === "1") {
+    const make = (name, text, example, buttons) => fetch(`${base}/${waba}/message_templates`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name, language: "pt_BR", category: "MARKETING",
+        components: [
+          { type: "BODY", text, example: { body_text: [[example]] } },
+          { type: "BUTTONS", buttons: buttons.map((t) => ({ type: "QUICK_REPLY", text: t })) },
+        ],
+      }),
+    }).then((r) => r.json());
+    out.templates = {
+      d3: await make("divinus_retorno_3d",
+        "Oi, {{1}}! Aqui é a Divinus 👋 Ficou alguma dúvida sobre site, chatbot ou painel de dados? Nosso diagnóstico gratuito leva só 20 minutos e mostra o que sua empresa pode melhorar. Quer marcar um horário?",
+        "Ana", ["Quero marcar", "Agora não"]),
+      d7: await make("divinus_retorno_7d",
+        "Oi, {{1}}! Última mensagem por aqui, prometo 🙂 Se em algum momento sua empresa precisar de um site, chatbot ou painel de dados, é só responder esta conversa. Até mais! Equipe Divinus",
+        "Ana", ["Quero conversar", "Não tenho interesse"]),
+    };
+    return Response.json(out);
+  }
   if (request.method === "POST" && waba) {
     out.subscribe = await (await fetch(`${base}/${waba}/subscribed_apps`, { method: "POST", headers: auth })).json();
   }

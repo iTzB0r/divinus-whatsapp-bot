@@ -33,6 +33,7 @@ const FOLLOWUPS = [
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.pathname === "/admin") return admin(url, request, env);
     if (url.pathname !== "/webhook") return new Response("Divinus WhatsApp bot", { status: 200 });
 
     if (request.method === "GET") {
@@ -84,6 +85,26 @@ async function route(payload, env) {
   }
   const results = await Promise.allSettled(jobs);
   for (const r of results) if (r.status === "rejected") console.log("route error", String(r.reason));
+}
+
+// Diagnóstico da conexão com a Meta (protegido pelo WA_VERIFY_TOKEN).
+// GET  /admin?key=...&waba=ID  -> status do número e apps assinados na conta
+// POST /admin?key=...&waba=ID  -> assina este app na conta do WhatsApp (webhooks)
+async function admin(url, request, env) {
+  if (!env.WA_VERIFY_TOKEN || url.searchParams.get("key") !== env.WA_VERIFY_TOKEN) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  const waba = url.searchParams.get("waba");
+  const base = `https://graph.facebook.com/${env.GRAPH_VERSION}`;
+  const auth = { Authorization: `Bearer ${env.WA_TOKEN}` };
+  const get = async (path) => (await fetch(`${base}/${path}`, { headers: auth })).json();
+  const out = {};
+  if (request.method === "POST" && waba) {
+    out.subscribe = await (await fetch(`${base}/${waba}/subscribed_apps`, { method: "POST", headers: auth })).json();
+  }
+  out.phone = await get(`${env.WA_PHONE_NUMBER_ID}?fields=display_phone_number,verified_name,name_status,code_verification_status,status,platform_type,quality_rating`);
+  if (waba) out.subscribed_apps = await get(`${waba}/subscribed_apps`);
+  return Response.json(out);
 }
 
 const stub = (env, waId) => env.CONVERSA.get(env.CONVERSA.idFromName(waId));

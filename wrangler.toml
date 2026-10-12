@@ -28,3 +28,12 @@ new_sqlite_classes = ["Conversa"]
 
 [observability]
 enabled = true
+
+# Painel da equipe: índice das conversas
+[[durable_objects.bindings]]
+name = "PAINEL"
+class_name = "Painel"
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Painel"]

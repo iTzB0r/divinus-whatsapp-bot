@@ -10,6 +10,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { DurableObject } from "cloudflare:workers";
 import { EmailMessage } from "cloudflare:email";
+import { Painel, painel, handlePainel } from "./painel.js";
 import { SYSTEM, TOOLS, NUDGE_15MIN, NUDGE_22H, OPT_OUT_REPLY, MEDIA_REPLY } from "./prompt.js";
 
 const MIN = 60_000;
@@ -35,6 +36,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/admin") return admin(url, request, env);
     if (url.pathname === "/admin/registrar") return registerPage(url, request, env);
+    if (url.pathname === "/painel" || url.pathname.startsWith("/painel/")) return handlePainel(url, request, env, stub);
     if (url.pathname !== "/webhook") return new Response("Divinus WhatsApp bot", { status: 200 });
 
     if (request.method === "GET") {
@@ -166,6 +168,8 @@ async function validSignature(body, header, secret) {
   return diff === 0;
 }
 
+export { Painel };
+
 // ---------------------------------------------------------------- Conversa (1 por cliente)
 
 export class Conversa extends DurableObject {
@@ -179,6 +183,32 @@ export class Conversa extends DurableObject {
       await this.ctx.storage.deleteAlarm();
       return new Response("ok");
     }
+    if (path === "/get") return Response.json(await this.load());
+    if (path === "/reply") {
+      // Resposta da equipe pelo painel: envia, registra e pausa o bot nesta conversa.
+      const { text, resumeBot } = await request.json();
+      const s = await this.load();
+      if (resumeBot) {
+        s.humanUntil = 0;
+        await this.save(s);
+        return Response.json({ ok: true });
+      }
+      if (!text?.trim()) return Response.json({ ok: false, error: "Mensagem vazia." }, { status: 400 });
+      if (Date.now() > s.lastUserAt + 24 * HOUR) {
+        return Response.json({ ok: false, error: "Passaram 24 h desde a última mensagem do cliente; o WhatsApp só permite mensagem modelo aprovada." }, { status: 400 });
+      }
+      try {
+        await sendText(this.env, s.waId, text.trim());
+      } catch (e) {
+        return Response.json({ ok: false, error: String(e.message || e) }, { status: 502 });
+      }
+      s.history.push({ role: "assistant", content: text.trim(), by: "equipe", at: Date.now() });
+      s.lastBotAt = Date.now();
+      s.humanUntil = Date.now() + HUMAN_PAUSE;
+      await this.save(s);
+      await this.ctx.storage.deleteAlarm();
+      return Response.json({ ok: true });
+    }
     return new Response("not found", { status: 404 });
   }
 
@@ -189,7 +219,25 @@ export class Conversa extends DurableObject {
       lead: false, optOut: false, humanUntil: 0, pending: "",
     };
   }
-  save(s) { return this.ctx.storage.put("s", s); }
+  async save(s) {
+    await this.ctx.storage.put("s", s);
+    if (!s.waId) return;
+    // Atualiza a lista do painel (não pode derrubar o atendimento se falhar).
+    const last = s.history.at(-1);
+    try {
+      await painel(this.env).fetch("https://painel/upsert", {
+        method: "POST",
+        body: JSON.stringify({
+          waId: s.waId, name: s.name, lead: s.lead, servico: s.leadInfo?.servico || "",
+          optOut: s.optOut, human: s.humanUntil > Date.now(),
+          lastText: last ? last.content.slice(0, 140) : "", lastFrom: last ? (last.by || last.role) : "",
+          lastAt: Math.max(s.lastUserAt, s.lastBotAt), lastUserAt: s.lastUserAt,
+        }),
+      });
+    } catch (e) {
+      console.log("painel upsert error", String(e));
+    }
+  }
 
   async inbound({ id, from, name, text, type }) {
     let s = await this.load();
@@ -210,8 +258,8 @@ export class Conversa extends DurableObject {
 
     // Junta mensagens seguidas do cliente num único turno.
     const last = s.history.at(-1);
-    if (last?.role === "user") last.content += "\n" + text;
-    else s.history.push({ role: "user", content: text });
+    if (last?.role === "user") { last.content += "\n" + text; last.at = Date.now(); }
+    else s.history.push({ role: "user", content: text, at: Date.now() });
     s.pending = id;
     await this.save(s);
 
@@ -280,6 +328,7 @@ export class Conversa extends DurableObject {
     if (name === "registrar_lead") {
       if (s.lead) return "Resumo já enviado antes.";
       s.lead = true;
+      s.leadInfo = { ...(input || {}), at: Date.now() };
       if (input?.nome) s.name = input.nome;
       await this.save(s);
       try {
@@ -301,7 +350,7 @@ export class Conversa extends DurableObject {
 
   async say(s, text) {
     await sendText(this.env, s.waId, text);
-    s.history.push({ role: "assistant", content: text });
+    s.history.push({ role: "assistant", content: text, at: Date.now() });
     if (s.history.length > MAX_HISTORY) s.history = s.history.slice(-MAX_HISTORY);
     // A conversa precisa começar pelo cliente.
     while (s.history.length && s.history[0].role !== "user") s.history.shift();

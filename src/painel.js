@@ -21,7 +21,7 @@ export class Painel extends DurableObject {
   }
 }
 
-function authorized(request, env) {
+export function authorized(request, env) {
   if (!env.PAINEL_SENHA) return false;
   const h = request.headers.get("Authorization") || "";
   if (!h.startsWith("Basic ")) return false;

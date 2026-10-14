@@ -10,7 +10,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { DurableObject } from "cloudflare:workers";
 import { EmailMessage } from "cloudflare:email";
-import { Painel, painel, handlePainel } from "./painel.js";
+import { Painel, painel, handlePainel, authorized } from "./painel.js";
+import { Demos, handleDemo, DEMO_HOST } from "./demo.js";
 import { SYSTEM, TOOLS, NUDGE_15MIN, NUDGE_22H, OPT_OUT_REPLY, MEDIA_REPLY } from "./prompt.js";
 
 const MIN = 60_000;
@@ -34,6 +35,7 @@ const FOLLOWUPS = [
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    if (url.hostname === DEMO_HOST || env.DEMO_LOCAL === "1") return handleDemo(url, request, env, authorized);
     if (url.pathname === "/admin") return admin(url, request, env);
     if (url.pathname === "/admin/registrar") return registerPage(url, request, env);
     if (url.pathname === "/painel" || url.pathname.startsWith("/painel/")) return handlePainel(url, request, env, stub);
@@ -190,7 +192,7 @@ async function validSignature(body, header, secret) {
   return diff === 0;
 }
 
-export { Painel };
+export { Painel, Demos };
 
 // ---------------------------------------------------------------- Conversa (1 por cliente)
 

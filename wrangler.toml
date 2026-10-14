@@ -37,3 +37,16 @@ class_name = "Painel"
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["Painel"]
+
+# Gerador de demonstrações
+[[durable_objects.bindings]]
+name = "DEMOS"
+class_name = "Demos"
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Demos"]
+
+[[routes]]
+pattern = "demo.divinustecnologia.com.br"
+custom_domain = true

@@ -14,6 +14,15 @@ const MAX_CHARS = 500;
 
 const store = (env) => env.DEMOS.get(env.DEMOS.idFromName("main"));
 
+// Exemplos fixos, públicos, usados no site da Divinus ("Veja funcionando").
+const EXAMPLES = {
+  "exemplo-otica": { slug: "exemplo-otica", name: "Ótica Visão Clara", segment: "otica", city: "Belém", color: "#1F4E8C", whatsapp: "", logo: "" },
+};
+async function findDemo(env, slug) {
+  if (EXAMPLES[slug]) return EXAMPLES[slug];
+  return (await store(env).fetch(`https://d/get?slug=${slug}`)).json();
+}
+
 // Guarda as configurações das demos (uma instância só).
 export class Demos extends DurableObject {
   async fetch(request) {
@@ -89,7 +98,7 @@ export async function handleDemo(url, request, env, authorized) {
 
   const slug = path.replace(/^\/+|\/+$/g, "");
   if (slug && /^[a-z0-9-]+$/.test(slug)) {
-    const demo = await (await store(env).fetch(`https://d/get?slug=${slug}`)).json();
+    const demo = await findDemo(env, slug);
     if (demo) return html(sitePage(demo));
   }
   return html(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="robots" content="noindex"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Divinus</title></head>
@@ -134,7 +143,7 @@ async function demoChat(request, env) {
   const origin = request.headers.get("Origin") || "";
   if (origin && origin !== `https://${DEMO_HOST}` && env.DEMO_LOCAL !== "1") return json({ error: "Origem não permitida." }, 403);
   const body = await request.json().catch(() => null);
-  const demo = body?.slug && /^[a-z0-9-]+$/.test(body.slug) ? await (await store(env).fetch(`https://d/get?slug=${body.slug}`)).json() : null;
+  const demo = body?.slug && /^[a-z0-9-]+$/.test(body.slug) ? await findDemo(env, body.slug) : null;
   if (!demo || !Array.isArray(body.messages) || !body.messages.length) return json({ error: "Requisição inválida." }, 400);
 
   const messages = [];
@@ -182,6 +191,12 @@ function sitePage(d) {
   const wa = waLink(d.whatsapp, `Olá, ${d.name}! Vim pelo site.`);
   const logo = d.logo ? `<img src="${d.logo}" alt="${n}">` : `<span class="mono">${esc(initials(d.name))}</span>`;
   const year = new Date().getFullYear();
+  const preview = { otica: "Claro! O exame é feito com hora marcada. Tenho horários amanhã de manhã e à tarde, qual fica melhor para você?",
+    oficina: "Posso sim! A revisão inclui itens de segurança, óleo e filtros. Qual o modelo e o ano do seu carro?",
+    clinica: "Com certeza! Qual especialidade você procura e qual o melhor dia para você?",
+    restaurante: "Oi! Hoje temos opções de prato do dia e grelhados. Vai querer delivery ou retirada?",
+    roupas: "Chegaram peças novas sim! Posso te mandar as fotos. Você procura algo para qual ocasião?",
+    salao: "Temos horários sim! Para qual dia você prefere e com qual profissional?" }[d.segment];
   const chips = { otica: ["Quanto custa o exame de vista?", "Vocês fazem lentes multifocais?", "Quero agendar um exame"],
     oficina: ["Quanto custa uma revisão?", "Meu carro está fazendo barulho no freio", "Vocês fazem leva e traz?"],
     clinica: ["Quero marcar uma consulta", "Vocês atendem convênio?", "Tem teleconsulta?"],
@@ -217,6 +232,12 @@ nav{display:flex;gap:26px;font-size:.95rem}nav a{text-decoration:none;color:var(
 .hero h1{font-size:clamp(2.2rem,5vw,3.8rem);max-width:15ch}.nm{color:var(--p)}
 .hero p{font-size:1.15rem;color:var(--muted);max-width:52ch;margin:22px 0 32px}
 .cta{display:flex;flex-wrap:wrap;gap:12px}
+.phone{background:#fff;border:1px solid var(--line);border-radius:28px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(20,20,40,.35);max-width:400px;justify-self:end;width:100%}
+.ph-top{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--p);color:var(--on)}.ph-top b{display:block}.ph-top small{opacity:.85;font-size:.8rem}
+.ph-top .av{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;font-family:"Sora";font-weight:700;overflow:hidden}.ph-top .av img{width:100%;height:100%;object-fit:contain;background:#fff}
+.ph-body{background:#F3F4F7;padding:16px;display:flex;flex-direction:column;gap:8px;min-height:230px}
+.ph-cta{display:block;width:100%;border:0;border-top:1px solid var(--line);background:#fff;color:var(--p);font:inherit;font-weight:700;padding:15px;cursor:pointer}.ph-cta:hover{background:var(--tint)}
+@media (max-width:900px){.phone{justify-self:stretch;max-width:none}}
 .card-hero{background:#fff;border:1px solid var(--line);border-radius:24px;padding:26px;box-shadow:0 30px 60px -30px rgba(20,20,40,.25)}
 .card-hero h3{font-size:1.05rem;margin-bottom:14px}.card-hero ul{list-style:none;margin:0;padding:0;display:grid;gap:12px}
 .card-hero li{display:flex;gap:12px;align-items:center;font-weight:500}.card-hero li span{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:10px;background:var(--soft)}
@@ -262,7 +283,10 @@ footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 <h1>${hero}</h1><p>${esc(p.sub)}</p>
 <div class="cta"><a class="btn btn-p" href="${esc(wa)}" target="_blank" rel="noopener">${esc(p.cta)}</a><button class="btn btn-o" type="button" data-open-chat>Falar com a assistente virtual</button></div>
 </div>
-<div class="card-hero"><h3>Por que escolher a ${n}</h3><ul>${p.perks.map(([i, t]) => `<li><span>${icon(i)}</span>${esc(t)}</li>`).join("")}</ul></div>
+<div class="phone" aria-label="Prévia da assistente virtual">
+<div class="ph-top"><span class="av">${d.logo ? `<img src="${d.logo}" alt="">` : esc(initials(d.name))}</span><div><b>${n}</b><small>online agora</small></div></div>
+<div class="ph-body"><div class="m in">Olá! 😊 Sou a assistente virtual da ${n}. Como posso ajudar?</div><div class="m out">${esc(chips[2])}</div><div class="m in">${esc(preview)}</div></div>
+<button type="button" class="ph-cta" data-open-chat>Testar a assistente agora</button></div>
 </div></section>
 
 <section class="sec" id="servicos"><div class="wrap">

@@ -50,3 +50,12 @@ new_sqlite_classes = ["Demos"]
 [[routes]]
 pattern = "demo.divinustecnologia.com.br"
 custom_domain = true
+
+# Conversas do chat dos sites de clientes (painel do cliente)
+[[durable_objects.bindings]]
+name = "SITE_CHATS"
+class_name = "SiteChats"
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["SiteChats"]
